@@ -167,6 +167,7 @@ footer {
 .header-tools{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 :root[data-theme="light"] .theme-toggle{background:#f0f2f6}
 @media(max-width:750px){.header-tools{gap:7px}.header-tools small{font-size:10px}.theme-toggle{min-width:unset;padding:10px}}
+.news-tier-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 0 12px}.news-tier-heading h3{margin:0;font-size:19px}.news-tier-heading .muted{font-size:12px}.top-news-story{border-left:3px solid var(--red);padding-left:15px;background:linear-gradient(90deg,rgba(225,38,70,.07),transparent)}.news-tier-label{font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--accent-text)}.news-headline{font-weight:700;font-size:17px;line-height:1.5;text-decoration:none;display:block;margin:8px 0 12px;color:var(--text)}.news-headline:hover{text-decoration:underline}.news-divider{border:0;border-top:1px solid var(--line);margin:22px 0}
 </style>
 </head>
 <body>
@@ -235,7 +236,7 @@ footer {
 
 <section id="news">
   <h2>Arsenal Newsroom <span style="font-size:12px;color:var(--link)">● HEADLINES</span></h2>
-  <p class="muted">Latest Arsenal headlines gathered from public news feeds. Select a headline to read the original report. Coverage depends on source indexing.</p>
+  <p class="muted">Latest Arsenal headlines gathered from public news feeds. Priority headlines are selected automatically using keyword relevance, not editorial verification. Always check the original report.</p>
   <div class="card">
     <div class="actions" style="align-items:center;justify-content:space-between">
       <div><strong id="newsCount">News feed</strong><div class="muted" id="newsUpdated" style="font-size:12px;margin-top:6px">Loading headlines…</div></div>
@@ -640,24 +641,55 @@ function newsDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
 }
+function newsImportance(article) {
+  const t = (article.title || "").toLowerCase();
+  const source = (article.source || "").toLowerCase();
+  let score = 0;
+  if (/arsenal|gunners|arteta|emirates|ø degaard|ødegaard|saka|saliba|rice|havertz|raya/i.test(t)) score += 3;
+  if (/confirmed|official|announc|breaking|exclusive|deal agreed|here we go|ruled out|injury|injured|returns|signs|signed|contract|starting xi|lineup|team news|red card|full.time|final score/i.test(t)) score += 4;
+  if (/transfer|bid|negotiat|medical|champions league|premier league|derby|manager|suspension|goal|result|fixture/i.test(t)) score += 2;
+  if (/arsenal.com|bbc sport|sky sports|the athletic|the guardian|reuters/i.test(source)) score += 1;
+  if (/opinion|predicted|ratings|round.up|roundup|reaction|what we learned|how to watch|live stream|where to watch|fan reacts|quiz|betting|odds|dream xi|dream team/i.test(t)) score -= 3;
+  return score;
+}
 function renderLiveNews() {
   const root = document.getElementById("liveNewsList");
   root.replaceChildren();
   const filtered = liveNews.filter(article => currentNewsFilter === "All" || article.category === currentNewsFilter);
   if (!filtered.length) {
-    root.appendChild(makeText("p",liveNews.length ? "No stories in this category yet." : "No headlines available yet. The first GitHub Actions news refresh may still need to run."));
+    root.appendChild(makeText("p",liveNews.length ? "No stories in this category yet." : "No headlines available yet. Run the manual GitHub news collection workflow, then refresh this page."));
     return;
   }
-  filtered.forEach(article => {
+  const ranked = filtered.map((article,index) => ({article,index,score:newsImportance(article)}))
+    .sort((a,b) => b.score-a.score || a.index-b.index);
+  // Top stories are the strongest-scoring relevant items, capped to keep the front page focused.
+  const top = ranked.filter(item => item.score >= 5).slice(0,8);
+  const topIndices = new Set(top.map(item => item.index));
+  const other = filtered.map((article,index) => ({article,index})).filter(item => !topIndices.has(item.index));
+  function heading(name,description,count) {
+    const wrap = document.createElement("div");
+    wrap.className = "news-tier-heading";
+    const h = makeText("h3",name + " (" + count + ")");
+    const sub = makeText("span",description);
+    sub.className = "muted";
+    wrap.append(h,sub);
+    root.appendChild(wrap);
+  }
+  function appendArticle(article,isTop) {
     const box = document.createElement("div");
-    box.className = "story";
-    const meta = makeText("p",article.source + "  •  " + article.category + "  •  " + newsDate(article.published));
+    box.className = "story" + (isTop ? " top-news-story" : "");
+    if (isTop) {
+      const label = makeText("div","TOP HEADLINE");
+      label.className = "news-tier-label";
+      box.appendChild(label);
+    }
+    const meta = makeText("p",(article.source || "Unknown source") + "  •  " + (article.category || "General") + "  •  " + newsDate(article.published));
     box.appendChild(meta);
     const headline = document.createElement("a");
     headline.href = article.url;
     headline.target = "_blank";
     headline.rel = "noopener noreferrer";
-    headline.style.cssText = "font-weight:700;font-size:17px;line-height:1.5;text-decoration:none;display:block;margin:8px 0 12px;color:#fff";
+    headline.className = "news-headline";
     headline.textContent = article.title + " ↗";
     box.appendChild(headline);
     const excerpt = typeof article.preview === "string" ? article.preview.trim() : "";
@@ -669,22 +701,32 @@ function renderLiveNews() {
     actions.className = "actions";
     actions.appendChild(makeButton("Save Story",() => {
       if (stories.some(story => story.url === article.url)) return alert("This story is already saved.");
-      stories.unshift({id:Date.now() + Math.random(),title:article.title,url:article.url,category:article.category,notes:(excerpt ? "Feed excerpt (unverified): " + excerpt + "\n" : "") + "Source: " + article.source + ". Verify details in the original article before posting.",status:"Saved"});
+      stories.unshift({id:Date.now() + Math.random(),title:article.title,url:article.url,category:article.category,notes:(excerpt ? "Feed excerpt (unverified): " + excerpt + "\\n" : "") + "Source: " + article.source + ". Verify details in the original article before posting.",status:"Saved"});
       persist();
       render();
       alert("Story saved to your library.");
     }));
     actions.appendChild(makeButton("Create Post",() => {
       document.getElementById("postTitle").value = article.title;
-      document.getElementById("postFacts").value = ""; // RSS excerpts are not verified facts
+      document.getElementById("postFacts").value = "";
       document.getElementById("postSource").value = article.source + " — " + article.url;
       showTab("creator");
     }));
     actions.appendChild(makeButton("Read Original ↗",() => window.open(article.url,"_blank","noopener,noreferrer")));
     box.appendChild(actions);
     root.appendChild(box);
-  });
+  }
+  if (top.length) {
+    heading("Top Headlines","Priority suggestions · automatically ranked",top.length);
+    top.forEach(item => appendArticle(item.article,true));
+  }
+  if (other.length) {
+    if (top.length) { const line = document.createElement("hr");line.className="news-divider";root.appendChild(line); }
+    heading("More Arsenal News","Additional reports and analysis",other.length);
+    other.forEach(item => appendArticle(item.article,false));
+  }
 }
+
 async function loadLiveNews() {
   const status = document.getElementById("newsUpdated");
   status.textContent = "Checking latest available snapshot…";
