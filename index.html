@@ -201,34 +201,26 @@ footer {
 </section>
 
 <section id="news">
-  <h2>Arsenal News Sources</h2>
-  <p class="muted">
-    Open trusted sources to research the latest Arsenal stories.
-    These are external links, not an automatic live feed.
-  </p>
-
+  <h2>Arsenal Newsroom <span style="font-size:12px;color:#ff8598">● HEADLINES</span></h2>
+  <p class="muted">Latest Arsenal headlines gathered from public news feeds. Select a headline to read the original report. Coverage depends on source indexing.</p>
   <div class="card">
-    <h3>Official & Established Sources</h3>
-    <div id="sourceLinks"></div>
-  </div>
-
-  <div class="card">
-    <h3>Journalist Research</h3>
-    <p class="muted">Search recent reporting and verify the original publication.</p>
-    <div class="actions">
-      <a class="btn" target="_blank" rel="noopener noreferrer"
-       href="https://www.google.com/search?q=David+Ornstein+Arsenal&tbm=nws">
-       David Ornstein ↗
-      </a>
-      <a class="btn" target="_blank" rel="noopener noreferrer"
-       href="https://www.google.com/search?q=Fabrizio+Romano+Arsenal&tbm=nws">
-       Fabrizio Romano ↗
-      </a>
-      <a class="btn" target="_blank" rel="noopener noreferrer"
-       href="https://www.google.com/search?q=Arsenal+injury+news&tbm=nws">
-       Injury News ↗
-      </a>
+    <div class="actions" style="align-items:center;justify-content:space-between">
+      <div><strong id="newsCount">News feed</strong><div class="muted" id="newsUpdated" style="font-size:12px;margin-top:6px">Loading headlines…</div></div>
+      <button class="primary" onclick="loadLiveNews()">↻ Refresh display</button>
     </div>
+    <div class="actions" id="newsFilters" style="margin-top:18px">
+      <button class="active" data-filter="All" onclick="filterNews('All')">All news</button>
+      <button data-filter="Transfers" onclick="filterNews('Transfers')">Transfers</button>
+      <button data-filter="Team news" onclick="filterNews('Team news')">Team news</button>
+      <button data-filter="Matches" onclick="filterNews('Matches')">Matches</button>
+      <button data-filter="General" onclick="filterNews('General')">Other</button>
+    </div>
+    <div id="liveNewsList" aria-live="polite"><p class="muted">Loading headlines…</p></div>
+  </div>
+  <div class="card">
+    <h3>Trusted source shortcuts</h3>
+    <p class="muted">Headlines above open their original articles. These shortcuts remain available for deeper research.</p>
+    <div id="sourceLinks"></div>
   </div>
 </section>
 
@@ -565,6 +557,76 @@ function render() {
   renderStories();
   renderIdeas();
 }
+
+
+let liveNews = [];
+let currentNewsFilter = "All";
+function filterNews(value) {
+  currentNewsFilter = value;
+  document.querySelectorAll("#newsFilters button").forEach(button => button.classList.toggle("active",button.dataset.filter === value));
+  renderLiveNews();
+}
+function newsDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+}
+function renderLiveNews() {
+  const root = document.getElementById("liveNewsList");
+  root.replaceChildren();
+  const filtered = liveNews.filter(article => currentNewsFilter === "All" || article.category === currentNewsFilter);
+  if (!filtered.length) {
+    root.appendChild(makeText("p",liveNews.length ? "No stories in this category yet." : "No headlines available yet. The first GitHub Actions news refresh may still need to run."));
+    return;
+  }
+  filtered.forEach(article => {
+    const box = document.createElement("div");
+    box.className = "story";
+    const meta = makeText("p",article.source + "  •  " + article.category + "  •  " + newsDate(article.published));
+    box.appendChild(meta);
+    const headline = document.createElement("a");
+    headline.href = article.url;
+    headline.target = "_blank";
+    headline.rel = "noopener noreferrer";
+    headline.style.cssText = "font-weight:700;font-size:17px;line-height:1.5;text-decoration:none;display:block;margin:8px 0 12px;color:#fff";
+    headline.textContent = article.title + " ↗";
+    box.appendChild(headline);
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    actions.appendChild(makeButton("Save Story",() => {
+      if (stories.some(story => story.url === article.url)) return alert("This story is already saved.");
+      stories.unshift({id:Date.now() + Math.random(),title:article.title,url:article.url,category:article.category,notes:"Source: " + article.source + ". Verify details in the original article before posting.",status:"Saved"});
+      persist();
+      render();
+      alert("Story saved to your library.");
+    }));
+    actions.appendChild(makeButton("Create Post",() => {
+      document.getElementById("postTitle").value = article.title;
+      document.getElementById("postFacts").value = "";
+      document.getElementById("postSource").value = article.source + " — " + article.url;
+      showTab("creator");
+    }));
+    box.appendChild(actions);
+    root.appendChild(box);
+  });
+}
+async function loadLiveNews() {
+  const status = document.getElementById("newsUpdated");
+  status.textContent = "Checking latest available snapshot…";
+  try {
+    const response = await fetch("./news.json?t=" + Date.now(),{cache:"no-store"});
+    if (!response.ok) throw new Error("Feed not published yet (HTTP " + response.status + ")");
+    const data = await response.json();
+    if (!Array.isArray(data.articles)) throw new Error("Unexpected feed format");
+    liveNews = data.articles.filter(article => article && typeof article.title === "string" && typeof article.url === "string" && article.url.startsWith("https://"));
+    document.getElementById("newsCount").textContent = liveNews.length + " latest headlines";
+    status.textContent = "Last collected: " + newsDate(data.updated_at) + " • Refreshes approximately every 30 minutes";
+    renderLiveNews();
+  } catch (error) {
+    status.textContent = "News feed unavailable: " + error.message;
+    renderLiveNews();
+  }
+}
+loadLiveNews();
 
 render();
 </script>
