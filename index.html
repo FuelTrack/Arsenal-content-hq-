@@ -168,7 +168,7 @@ footer {
 :root[data-theme="light"] .theme-toggle{background:#f0f2f6}
 @media(max-width:750px){.header-tools{gap:7px}.header-tools small{font-size:10px}.theme-toggle{min-width:unset;padding:10px}}
 .news-tier-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 0 12px}.news-tier-heading h3{margin:0;font-size:19px}.news-tier-heading .muted{font-size:12px}.top-news-story{border-left:3px solid var(--red);padding-left:15px;background:linear-gradient(90deg,rgba(225,38,70,.07),transparent)}.news-tier-label{font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--accent-text)}.news-headline{font-weight:700;font-size:17px;line-height:1.5;text-decoration:none;display:block;margin:8px 0 12px;color:var(--text)}.news-headline:hover{text-decoration:underline}.news-divider{border:0;border-top:1px solid var(--line);margin:22px 0}
-</style>
+.source-signal{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--text);margin-bottom:8px}.source-signal.warn{border-color:#c48a37}.source-signal.official{border-color:#3b9a6d}</style>
 </head>
 <body>
 
@@ -319,7 +319,7 @@ footer {
       placeholder="Your generated caption will appear here..."></textarea>
     <div class="actions">
       <button class="primary" onclick="copyCaption()">Copy Caption</button>
-      <button onclick="saveIdea()">Save as Post Idea</button>
+      <button onclick="saveIdea()">Save as Post Idea</button><button onclick="showTab('planner')">Open Planner →</button>
     </div>
   </div>
 </section>
@@ -554,10 +554,7 @@ function renderStories() {
     }
 
     actions.appendChild(makeButton("Create Post",() => {
-      document.getElementById("postTitle").value = story.title;
-      document.getElementById("postFacts").value = story.notes || "";
-      document.getElementById("postSource").value = story.url || "";
-      showTab("creator");
+      startContentFlow({title:story.title,url:story.url,source:"Saved story",category:story.category});
     }));
 
     actions.appendChild(makeButton("Mark Published",() => {
@@ -731,17 +728,19 @@ function newsImportance(article) {
 function renderLiveNews() {
   const root = document.getElementById("liveNewsList");
   root.replaceChildren();
-  const filtered = liveNews.filter(article => currentNewsFilter === "All" || article.category === currentNewsFilter);
+  const search=document.getElementById("newsSearch").value.trim().toLowerCase();
+  const sort=document.getElementById("newsSort").value;
+  const filtered=liveNews.filter(article=>(currentNewsFilter==="All"||article.category===currentNewsFilter)&&(!search||[article.title,article.source,article.category].some(v=>String(v||"").toLowerCase().includes(search))));
   if (!filtered.length) {
     root.appendChild(makeText("p",liveNews.length ? "No stories in this category yet." : "No headlines available yet. Run the manual GitHub news collection workflow, then refresh this page."));
     return;
   }
   const ranked = filtered.map((article,index) => ({article,index,score:newsImportance(article)}))
-    .sort((a,b) => b.score-a.score || a.index-b.index);
+    .sort((a,b)=>sort==="source"?String(a.article.source||"").localeCompare(String(b.article.source||"")):sort==="newest"?String(b.article.published||"").localeCompare(String(a.article.published||"")):b.score-a.score||a.index-b.index);
   // Top stories are the strongest-scoring relevant items, capped to keep the front page focused.
   const top = ranked.filter(item => item.score >= 5).slice(0,8);
   const topIndices = new Set(top.map(item => item.index));
-  const other = filtered.map((article,index) => ({article,index})).filter(item => !topIndices.has(item.index));
+  const other = ranked.filter(item => !topIndices.has(item.index));
   function heading(name,description,count) {
     const wrap = document.createElement("div");
     wrap.className = "news-tier-heading";
@@ -761,6 +760,8 @@ function renderLiveNews() {
     }
     const meta = makeText("p",(article.source || "Unknown source") + "  •  " + (article.category || "General") + "  •  " + newsDate(article.published));
     box.appendChild(meta);
+    const signal=sourceSignal(article),badge=makeText("span",signal[0]);
+    badge.className="source-signal "+signal[1];box.appendChild(badge);
     const headline = document.createElement("a");
     headline.href = article.url;
     headline.target = "_blank";
@@ -782,12 +783,7 @@ function renderLiveNews() {
       render();
       alert("Story saved to your library.");
     }));
-    actions.appendChild(makeButton("Create Post",() => {
-      document.getElementById("postTitle").value = article.title;
-      document.getElementById("postFacts").value = "";
-      document.getElementById("postSource").value = article.source + " — " + article.url;
-      showTab("creator");
-    }));
+    actions.appendChild(makeButton("Create Post →",() => startContentFlow(article)));
     actions.appendChild(makeButton("Read Original ↗",() => window.open(article.url,"_blank","noopener,noreferrer")));
     box.appendChild(actions);
     root.appendChild(box);
