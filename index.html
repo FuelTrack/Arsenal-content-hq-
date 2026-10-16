@@ -193,6 +193,7 @@ footer {
   <button onclick="showTab('stories',this)">Story Library</button>
   <button onclick="showTab('creator',this)">Post Creator</button>
   <button onclick="showTab('planner',this)">Content Planner</button>
+  <button onclick="showTab('analytics',this)">Analytics</button>
 </nav>
 
 <section id="dashboard" class="active">
@@ -249,6 +250,9 @@ footer {
       <button data-filter="Matches" onclick="filterNews('Matches')">Matches</button>
       <button data-filter="General" onclick="filterNews('General')">Other</button>
     </div>
+    <input id="newsSearch" placeholder="Search headlines, players and sources" oninput="renderLiveNews()">
+    <select id="newsSort" onchange="renderLiveNews()"><option value="relevance">Most relevant</option><option value="newest">Newest</option><option value="source">Source A–Z</option></select>
+    <button onclick="saveCurrentFilter()">Save search</button><select id="savedNewsFilter" onchange="useSavedFilter()"><option value="">Saved searches</option></select>
     <div id="liveNewsList" aria-live="polite"><p class="muted">Loading headlines…</p></div>
   </div>
   <div class="card">
@@ -307,7 +311,7 @@ footer {
     <label for="passion">Daily Arsenal Info passion level</label>
     <div class="voice-row"><span class="muted">Factual</span><input id="passion" type="range" min="0" max="100" step="5" value="75" oninput="document.getElementById('passionValue').textContent=this.value+'%'"><strong id="passionValue">75%</strong></div>
     <p class="editor-note">Inspired by your own captions: personal, conversational, selective CAPITALS, and a little emotion. This is a free, rules-based draft generator, not an AI fact checker. Verify claims against the original article before posting.</p>
-    <button class="primary" onclick="generateCaption()">Generate In My Voice</button>
+    <label>Caption length</label><select id="captionLength"><option value="medium">Standard</option><option value="short">Short</option><option value="long">Detailed</option></select><label>Preferred opening</label><input id="voiceOpening" placeholder="Optional personal opening"><label>Sign-off</label><input id="voiceEnding" placeholder="Optional sign-off"><button onclick="saveVoiceSettings()">Save voice preferences</button> <button class="primary" onclick="generateCaption()">Generate In My Voice</button>
   </div>
   <div class="card">
     <h3>Your Instagram Caption</h3>
@@ -327,6 +331,7 @@ footer {
     <div id="ideaList"></div>
   </div>
 </section>
+<section id="analytics"><h2>Instagram Performance Tracker</h2><p class="muted">Manually track your posts. Saved locally in this browser.</p><div class="card"><input id="metricTitle" placeholder="Post title"><select id="metricType"><option>Breaking News</option><option>Transfers</option><option>Matchday</option><option>Player Reaction</option></select><input id="metricReach" type="number" min="0" placeholder="Reach"><input id="metricLikes" type="number" min="0" placeholder="Likes"><input id="metricShares" type="number" min="0" placeholder="Shares"><input id="metricSaves" type="number" min="0" placeholder="Saves"><button class="primary" onclick="saveMetric()">Save post metrics</button></div><div class="card"><h3>Performance overview</h3><p id="metricSummary"></p><div id="metricRows"></div></div></section>
 </main>
 
 <footer>
