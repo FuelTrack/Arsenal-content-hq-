@@ -354,6 +354,7 @@ function applyTheme(theme) {
     button.setAttribute("aria-pressed", String(light));
   }
   document.querySelector('meta[name="theme-color"]').content = light ? "#f6f7fa" : "#101116";
+  if(typeof renderMetricInsights==="function" && document.getElementById("metricChart"))renderMetricInsights();
 }
 function toggleTheme() {
   const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
@@ -429,6 +430,27 @@ function saveMetric(){
  storeExtra(KEY_METRICS,metrics);renderMetrics();
  document.getElementById("metricTitle").value="";
 }
+
+function renderMetricInsights(){
+ const root=document.getElementById("metricInsights"),canvas=document.getElementById("metricChart");
+ if(!root||!canvas)return;root.replaceChildren();
+ const byType=new Map();
+ metrics.forEach(m=>{const key=m.type||"Other",item=byType.get(key)||{count:0,reach:0,interactions:0};
+ item.count++;item.reach+=Number(m.reach)||0;item.interactions+=(Number(m.likes)||0)+(Number(m.shares)||0)+(Number(m.saves)||0);byType.set(key,item);});
+ const groups=[...byType.entries()].sort((a,b)=>b[1].reach-a[1].reach);
+ if(!groups.length){root.appendChild(makeText("p","Add post metrics to reveal your strongest content categories."));}
+ else{
+ const best=groups[0];const summary=makeText("p","Highest total reach: "+best[0]+" ("+best[1].reach.toLocaleString("en-GB")+" across "+best[1].count+" posts). These are descriptive results, not predictions.");
+ root.appendChild(summary);
+ groups.forEach(([name,item])=>{const p=makeText("span",name+": "+item.count+" posts · "+(item.reach?((item.interactions/item.reach)*100).toFixed(1)+"%":"—")+" interaction rate");p.className="insight-pill";root.appendChild(p);});
+ }
+ const ctx=canvas.getContext("2d"),w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);
+ ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--text").trim()||"#ffffff";
+ ctx.font="16px Arial";ctx.fillText("Total reach by content type",18,26);
+ const max=Math.max(1,...groups.map(g=>g[1].reach)),shown=groups.slice(0,6);
+ shown.forEach(([name,item],i)=>{const y=52+i*39;ctx.fillStyle="#e12646";ctx.fillRect(180,y,Math.max(1,590*item.reach/max),22);ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--text").trim()||"#ffffff";ctx.font="14px Arial";ctx.fillText(name.slice(0,19),12,y+16);ctx.fillText(item.reach.toLocaleString("en-GB"),790,y+16);});
+}
+
 function renderMetrics(){
  const root=document.getElementById("metricRows");root.replaceChildren();
  const reach=metrics.reduce((n,m)=>n+m.reach,0),interactions=metrics.reduce((n,m)=>n+m.likes+m.shares+m.saves,0);
