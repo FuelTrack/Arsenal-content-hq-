@@ -40,7 +40,10 @@ header {
   align-items:center;
   gap:12px;
 }
-.logo {font-size:21px;font-weight:800}
+.logo {font-size:21px;font-weight:800;display:flex;align-items:center;gap:12px}
+.brand-logo{width:46px;height:46px;border-radius:12px;object-fit:cover;border:1px solid var(--line);background:var(--panel2)}
+.brand-wordmark{display:inline-block}
+@media(max-width:750px){.brand-logo{width:36px;height:36px}.logo{font-size:15px;gap:8px}}
 .logo span {color:var(--red)}
 small,.muted {color:var(--muted)}
 main {max-width:1250px;margin:auto;padding:25px 5%}
@@ -169,7 +172,7 @@ footer {
 <body>
 
 <header>
-  <div class="logo">ARSENAL <span>CONTENT HQ</span></div>
+  <div class="logo"><img class="brand-logo" src="./DAI2.png" alt="Daily Arsenal Info logo" onerror="this.style.display='none'"><span class="brand-wordmark">ARSENAL <span>CONTENT HQ</span></span></div>
   <div class="header-tools"><small>DAILYARSENALINFO</small><button id="themeToggle" class="theme-toggle" type="button" onclick="toggleTheme()" aria-label="Switch to light theme" aria-pressed="false">☀ Light mode</button></div>
 </header>
 
