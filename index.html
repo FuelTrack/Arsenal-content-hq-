@@ -374,6 +374,72 @@ function load(key) {
 let stories = load(KEY_STORIES);
 let ideas = load(KEY_IDEAS);
 
+const KEY_METRICS="achq_metrics_v1", KEY_FILTERS="achq_filters_v1", KEY_VOICE="achq_voice_v1";
+let metrics=load(KEY_METRICS), savedFilters=load(KEY_FILTERS);
+function storeExtra(key,data){try{localStorage.setItem(key,JSON.stringify(data));}catch(e){alert("Browser storage unavailable.");}}
+function saveVoiceSettings(){
+ storeExtra(KEY_VOICE,{opening:document.getElementById("voiceOpening").value.trim(),ending:document.getElementById("voiceEnding").value.trim(),length:document.getElementById("captionLength").value});
+ alert("Voice preferences saved.");
+}
+function restoreVoiceSettings(){
+ try{const v=JSON.parse(localStorage.getItem(KEY_VOICE)||"{}");
+ document.getElementById("voiceOpening").value=v.opening||"";
+ document.getElementById("voiceEnding").value=v.ending||"";
+ document.getElementById("captionLength").value=["short","medium","long"].includes(v.length)?v.length:"medium";
+ }catch(e){}
+}
+function saveCurrentFilter(){
+ const query=document.getElementById("newsSearch").value.trim();
+ if(!query)return alert("Enter a search term first.");
+ if(savedFilters.some(f=>f.query===query&&f.category===currentNewsFilter))return alert("Already saved.");
+ savedFilters.push({query,category:currentNewsFilter});storeExtra(KEY_FILTERS,savedFilters);renderSavedFilters();
+}
+function renderSavedFilters(){
+ const select=document.getElementById("savedNewsFilter");select.replaceChildren(new Option("Saved searches",""));
+ savedFilters.forEach((f,i)=>select.add(new Option(f.query+" ("+f.category+")",String(i))));
+}
+function useSavedFilter(){
+ const id=document.getElementById("savedNewsFilter").value;if(id==="")return;
+ const filter=savedFilters[Number(id)];if(!filter)return;
+ document.getElementById("newsSearch").value=filter.query;filterNews(filter.category);
+}
+function sourceSignal(article){
+ const src=String(article.source||"").toLowerCase(),t=String(article.title||"").toLowerCase();
+ if(/arsenal.com|arsenal football club/.test(src))return ["Club publisher","official"];
+ if(/reportedly|rumou?r|linked|could|might|potential|claims|according to|eyeing/.test(t))return ["Unconfirmed report","warn"];
+ if(/bbc sport|sky sports|reuters|the athletic|the guardian/.test(src))return ["Established publisher",""];
+ return ["Check original source",""];
+}
+function startContentFlow(article){
+ document.getElementById("postTitle").value=article.title||"";
+ document.getElementById("postFacts").value="";
+ document.getElementById("postSource").value=(article.source||"")+(article.url?" — "+article.url:"");
+ document.getElementById("postStyle").value=article.category==="Transfers"?"transfer":article.category==="Matches"?"matchday":"update";
+ showTab("creator");
+}
+function saveMetric(){
+ const title=document.getElementById("metricTitle").value.trim();
+ if(!title)return alert("Enter a post title.");
+ const values=["Reach","Likes","Shares","Saves"].map(k=>Number(document.getElementById("metric"+k).value||0));
+ if(values.some(v=>!Number.isSafeInteger(v)||v<0))return alert("Use non-negative whole numbers.");
+ metrics.unshift({id:Date.now()+Math.random(),title,type:document.getElementById("metricType").value,reach:values[0],likes:values[1],shares:values[2],saves:values[3]});
+ storeExtra(KEY_METRICS,metrics);renderMetrics();
+ document.getElementById("metricTitle").value="";
+}
+function renderMetrics(){
+ const root=document.getElementById("metricRows");root.replaceChildren();
+ const reach=metrics.reduce((n,m)=>n+m.reach,0),interactions=metrics.reduce((n,m)=>n+m.likes+m.shares+m.saves,0);
+ document.getElementById("metricSummary").textContent=metrics.length+" tracked posts • "+reach.toLocaleString("en-GB")+" total reach • "+(reach?(interactions/reach*100).toFixed(1)+"%":"—")+" interaction rate (likes + shares + saves / reach)";
+ metrics.forEach(m=>{
+ const box=document.createElement("div");box.className="story";
+ box.appendChild(makeText("strong",m.title+" — "+m.type));
+ box.appendChild(makeText("p","Reach: "+m.reach.toLocaleString("en-GB")+" • Likes: "+m.likes+" • Shares: "+m.shares+" • Saves: "+m.saves));
+ box.appendChild(makeButton("Delete",()=>{if(!confirm("Delete this entry?"))return;metrics=metrics.filter(x=>x.id!==m.id);storeExtra(KEY_METRICS,metrics);renderMetrics();}));
+ root.appendChild(box);
+ });
+}
+
+
 function persist() {
   try {
     localStorage.setItem(KEY_STORIES, JSON.stringify(stories));
@@ -521,6 +587,9 @@ function generateCaption() {
   if (!title) return alert("Enter a headline first.");
   // Never turn a rumour into a confirmed event. The headline remains verbatim.
   const uncertain = /reportedly|report|rumou?r|linked|could|might|may |interest|target|consider|eyeing|set to|expected|potential|claims|according to|possible|talks/i.test(title);
+  const length = document.getElementById("captionLength").value;
+  const opening = document.getElementById("voiceOpening").value.trim();
+  const ending = document.getElementById("voiceEnding").value.trim();
   const intro = {
     breaking: passion >= 65 ? "Wow... big Arsenal news 👀" : "Arsenal update:",
     update: passion >= 65 ? "Interesting Arsenal update here... 👀" : "Arsenal update:",
@@ -529,11 +598,11 @@ function generateCaption() {
     player: passion >= 65 ? "What a player... 🤩" : "Arsenal player update:",
     discussion: passion >= 65 ? "I've got to hear what everyone thinks about this one... 👀" : "Arsenal discussion:"
   }[style] || "Arsenal update:";
-  let parts = [intro, title];
+  let parts = [opening || intro, title];
   if (facts) parts.push(facts);
   else parts.push("[Add verified details from the original report before posting.]");
   if (uncertain) parts.push("Still only a report at this stage, nothing confirmed. Let's see how this develops.");
-  if (passion >= 45) {
+  if (passion >= 45 && length !== "short") {
     const reactions = {
       breaking:"Big talking point for us Arsenal fans...",
       update:"Definitely one to keep an eye on...",
@@ -546,6 +615,8 @@ function generateCaption() {
     else if (style !== "player" || facts) parts.push(reactions[style] || reactions.update);
   }
   if (passion >= 85 && !uncertain && facts) parts.push("COYG ❤️");
+  if (length === "long" && facts) parts.push("My thoughts: [Add your own opinion here.]");
+  if (ending) parts.push(ending);
   if (source) parts.push("Source: " + source);
   if (passion < 45 || style === "discussion") parts.push("What do you make of this?");
   document.getElementById("captionOutput").value = parts.join("\n\n");
@@ -749,6 +820,9 @@ async function loadLiveNews() {
     renderLiveNews();
   }
 }
+restoreVoiceSettings();
+renderSavedFilters();
+renderMetrics();
 loadLiveNews();
 
 render();
