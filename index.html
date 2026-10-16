@@ -784,6 +784,43 @@ function newsImportance(article) {
   if (/opinion|predicted|ratings|round.up|roundup|reaction|what we learned|how to watch|live stream|where to watch|fan reacts|quiz|betting|odds|dream xi|dream team/i.test(t)) score -= 3;
   return score;
 }
+
+const CLUSTER_STOP=new Set(["arsenal","gunners","football","latest","news","update","updates","report","reports","says","said","amid","after","before","with","from","that","this","have","been","will","could","would","about","their","they","what","when","where","into","more","premier","league","player","players","club","today","exclusive","confirmed","transfer","transfers","match","against","live","ahead"]);
+function clusterTerms(title){return new Set(String(title||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(w=>w.length>=4&&!CLUSTER_STOP.has(w)));}
+function findStoryClusters(articles){
+ const groups=[],used=new Set();
+ articles.forEach((article,i)=>{
+  if(used.has(i))return;
+  const terms=clusterTerms(article.title);if(terms.size<2)return;
+  const related=[i];
+  articles.forEach((other,j)=>{
+   if(j<=i||used.has(j)||other.category!==article.category)return;
+   const words=clusterTerms(other.title);
+   let shared=0;terms.forEach(w=>{if(words.has(w))shared++;});
+   if(shared>=2&&shared/Math.min(terms.size,words.size)>=.45)related.push(j);
+  });
+  if(related.length>1){related.forEach(j=>used.add(j));groups.push(related.map(j=>articles[j]));}
+ });
+ return groups.sort((a,b)=>b.length-a.length).slice(0,8);
+}
+function renderClusters(articles){
+ const target=document.getElementById("clusterSummary");target.replaceChildren();
+ const groups=findStoryClusters(articles);
+ if(!groups.length){target.textContent="No closely matching headline groups found in this selection.";return;}
+ const heading=makeText("strong","Related coverage · "+groups.length+" possible story groups");target.appendChild(heading);
+ target.appendChild(makeText("p","Automatically grouped by shared headline terms. These may not describe the same event — check the sources."));
+ groups.forEach(group=>{
+  const details=document.createElement("details");details.className="cluster-card";
+  details.appendChild(makeText("summary",group[0].title+" ("+group.length+" reports)"));
+  group.forEach(article=>{
+   const row=document.createElement("div");row.className="story";
+   const link=document.createElement("a");link.href=article.url;link.target="_blank";link.rel="noopener noreferrer";link.textContent=article.source+" — "+article.title;row.appendChild(link);
+   row.appendChild(makeButton("Create Post",()=>startContentFlow(article)));
+   details.appendChild(row);
+  });target.appendChild(details);
+ });
+}
+
 function renderLiveNews() {
   const root = document.getElementById("liveNewsList");
   root.replaceChildren();
@@ -791,9 +828,11 @@ function renderLiveNews() {
   const sort=document.getElementById("newsSort").value;
   const filtered=liveNews.filter(article=>(currentNewsFilter==="All"||article.category===currentNewsFilter)&&(!search||[article.title,article.source,article.category].some(v=>String(v||"").toLowerCase().includes(search))));
   if (!filtered.length) {
+    document.getElementById("clusterSummary").replaceChildren();
     root.appendChild(makeText("p",liveNews.length ? "No stories in this category yet." : "No headlines available yet. Run the manual GitHub news collection workflow, then refresh this page."));
     return;
   }
+  renderClusters(filtered);
   const ranked = filtered.map((article,index) => ({article,index,score:newsImportance(article)}))
     .sort((a,b)=>sort==="source"?String(a.article.source||"").localeCompare(String(b.article.source||"")):sort==="newest"?String(b.article.published||"").localeCompare(String(a.article.published||"")):b.score-a.score||a.index-b.index);
   // Top stories are the strongest-scoring relevant items, capped to keep the front page focused.
