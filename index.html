@@ -718,17 +718,20 @@ function renderGraphic(){
  const canvas=document.getElementById("graphicCanvas");if(!canvas)return;
  const ctx=canvas.getContext("2d"),w=canvas.width,h=canvas.height;
  ctx.fillStyle="#14151d";ctx.fillRect(0,0,w,h);
- if(graphicPhoto){const scale=Math.max(w/graphicPhoto.width,h/graphicPhoto.height),sw=w/scale,sh=h/scale;ctx.drawImage(graphicPhoto,(graphicPhoto.width-sw)/2,(graphicPhoto.height-sh)/2,sw,sh,0,0,w,h);}
+ if(graphicPhoto){const scale=Math.max(w/graphicPhoto.width,h/graphicPhoto.height),sw=w/scale,sh=h/scale,position=Number(document.getElementById("graphicImagePosition").value)/100;ctx.drawImage(graphicPhoto,(graphicPhoto.width-sw)*position,(graphicPhoto.height-sh)*position,sw,sh,0,0,w,h);}
  const fade=ctx.createLinearGradient(0,0,0,h);fade.addColorStop(0,"rgba(12,12,18,.28)");fade.addColorStop(.45,"rgba(12,12,18,.68)");fade.addColorStop(1,"rgba(12,12,18,.98)");ctx.fillStyle=fade;ctx.fillRect(0,0,w,h);
- ctx.fillStyle="#e12646";ctx.fillRect(0,0,w,20);ctx.fillRect(68,865,180,10);
+ const template=document.getElementById("graphicTemplate").value;
+ const palette={breaking:"#e12646",transfer:"#8e63ff",matchday:"#e8aa3e",ratings:"#33b7a5",official:"#d9e1e9"};
+ const accent=palette[template]||"#e12646";ctx.fillStyle=accent;ctx.fillRect(0,0,w,20);
+ const middle=document.getElementById("graphicPlacement").value==="middle";const titleBase=middle?560:940;ctx.fillRect(68,titleBase-75,180,10);
  ctx.fillStyle="#ffffff";ctx.font="bold 36px Arial";ctx.fillText("DAILY ARSENAL INFO",70,105);
- ctx.fillStyle="#ff536d";ctx.font="bold 38px Arial";ctx.fillText(document.getElementById("graphicType").value,70,830);
+ ctx.fillStyle=accent;ctx.font="bold 38px Arial";const labels={breaking:"BREAKING NEWS",transfer:"TRANSFER UPDATE",matchday:"MATCHDAY",ratings:"PLAYER RATINGS",official:"OFFICIAL ANNOUNCEMENT"};ctx.fillText(labels[template]||document.getElementById("graphicType").value,70,titleBase-110);
  const title=document.getElementById("graphicTitle").value.trim()||"YOUR ARSENAL HEADLINE";
  let size=83,lines=[];do{ctx.font="bold "+size+"px Arial";lines=graphicLines(ctx,title,w-140,5);if(lines.length*size*1.17<=380)break;size-=4;}while(size>45);
- ctx.fillStyle="#fff";lines.forEach((line,i)=>ctx.fillText(line,70,940+i*size*1.17,w-140));
- ctx.font="30px Arial";ctx.fillStyle="#e4e5ec";const sub=graphicLines(ctx,document.getElementById("graphicSub").value,w-140,2);sub.forEach((line,i)=>ctx.fillText(line,70,1205+i*38));
- ctx.fillStyle="#e12646";ctx.fillRect(0,1305,w,45);
- const logo=new Image();logo.onload=()=>{ctx.save();ctx.beginPath();ctx.roundRect(925,48,105,105,18);ctx.clip();ctx.drawImage(logo,925,48,105,105);ctx.restore();};logo.src="./DAI2.png";
+ ctx.fillStyle="#fff";lines.forEach((line,i)=>ctx.fillText(line,70,titleBase+i*size*1.17,w-140));
+ ctx.font="30px Arial";ctx.fillStyle="#e4e5ec";const sub=graphicLines(ctx,document.getElementById("graphicSub").value,w-140,2);sub.forEach((line,i)=>ctx.fillText(line,70,middle?1040+i*38:1205+i*38));
+ ctx.fillStyle=accent;ctx.fillRect(0,1305,w,45);
+ const logo=new Image();logo.onload=()=>{const size=Number(document.getElementById("graphicLogoSize").value),x=w-size-50;ctx.save();ctx.beginPath();ctx.roundRect(x,48,size,size,18);ctx.clip();ctx.drawImage(logo,x,48,size,size);ctx.restore();};logo.src="./DAI2.png";
 }
 function downloadGraphic(){renderGraphic();setTimeout(()=>{const canvas=document.getElementById("graphicCanvas");const a=document.createElement("a");a.download="daily-arsenal-info-post.png";a.href=canvas.toDataURL("image/png");a.click();},350);}
 
