@@ -651,6 +651,61 @@ function saveIdea() {
   alert("Post idea saved to your planner.");
 }
 
+
+let calendarOffset=0, graphicPhoto=null;
+function localDateKey(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return y+"-"+m+"-"+day;}
+function changeCalendarWeek(direction){calendarOffset=direction===0?0:calendarOffset+direction;renderCalendar();}
+function renderCalendar(){
+ const root=document.getElementById("calendarGrid");if(!root)return;root.replaceChildren();
+ const monday=new Date();monday.setHours(12,0,0,0);monday.setDate(monday.getDate()-(monday.getDay()+6)%7+calendarOffset*7);
+ const sunday=new Date(monday);sunday.setDate(sunday.getDate()+6);
+ document.getElementById("calendarWeekLabel").textContent=monday.toLocaleDateString("en-GB",{day:"numeric",month:"short"})+" – "+sunday.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+ for(let i=0;i<7;i++){
+  const date=new Date(monday);date.setDate(date.getDate()+i);
+  const key=localDateKey(date),cell=document.createElement("div");cell.className="calendar-day";
+  const label=makeText("div",date.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"}));label.className="calendar-day-label";cell.appendChild(label);
+  ideas.filter(idea=>idea.plannedDate===key).forEach(idea=>{
+   const item=document.createElement("div");item.className="calendar-entry";
+   item.appendChild(makeText("strong",idea.status||"Draft"));
+   item.appendChild(makeText("p",String(idea.caption||"").slice(0,90)));
+   item.appendChild(makeButton("Edit",()=>{document.getElementById("captionOutput").value=idea.caption;showTab("creator");}));
+   cell.appendChild(item);
+  });root.appendChild(cell);
+ }
+}
+function loadGraphicImage(event){
+ const file=event.target.files&&event.target.files[0];if(!file)return;
+ if(!file.type.startsWith("image/")||file.size>12*1024*1024)return alert("Choose an image under 12 MB.");
+ const url=URL.createObjectURL(file),img=new Image();
+ img.onload=()=>{URL.revokeObjectURL(url);graphicPhoto=img;renderGraphic();};
+ img.onerror=()=>{URL.revokeObjectURL(url);alert("Could not read image.");};img.src=url;
+}
+function fillGraphicFromCreator(){document.getElementById("graphicTitle").value=document.getElementById("postTitle").value;renderGraphic();}
+function graphicLines(ctx,text,maxWidth,maxLines){
+ const words=String(text||"").split(/\s+/).filter(Boolean),lines=[];let line="";
+ words.forEach(word=>{const candidate=line?line+" "+word:word;if(ctx.measureText(candidate).width>maxWidth&&line){lines.push(line);line=word;}else line=candidate;});
+ if(line)lines.push(line);
+ if(lines.length>maxLines){lines.length=maxLines;while(ctx.measureText(lines[maxLines-1]+"…").width>maxWidth)lines[maxLines-1]=lines[maxLines-1].slice(0,-1);lines[maxLines-1]+="…";}
+ return lines;
+}
+function renderGraphic(){
+ const canvas=document.getElementById("graphicCanvas");if(!canvas)return;
+ const ctx=canvas.getContext("2d"),w=canvas.width,h=canvas.height;
+ ctx.fillStyle="#14151d";ctx.fillRect(0,0,w,h);
+ if(graphicPhoto){const scale=Math.max(w/graphicPhoto.width,h/graphicPhoto.height),sw=w/scale,sh=h/scale;ctx.drawImage(graphicPhoto,(graphicPhoto.width-sw)/2,(graphicPhoto.height-sh)/2,sw,sh,0,0,w,h);}
+ const fade=ctx.createLinearGradient(0,0,0,h);fade.addColorStop(0,"rgba(12,12,18,.28)");fade.addColorStop(.45,"rgba(12,12,18,.68)");fade.addColorStop(1,"rgba(12,12,18,.98)");ctx.fillStyle=fade;ctx.fillRect(0,0,w,h);
+ ctx.fillStyle="#e12646";ctx.fillRect(0,0,w,20);ctx.fillRect(68,865,180,10);
+ ctx.fillStyle="#ffffff";ctx.font="bold 36px Arial";ctx.fillText("DAILY ARSENAL INFO",70,105);
+ ctx.fillStyle="#ff536d";ctx.font="bold 38px Arial";ctx.fillText(document.getElementById("graphicType").value,70,830);
+ const title=document.getElementById("graphicTitle").value.trim()||"YOUR ARSENAL HEADLINE";
+ let size=83,lines=[];do{ctx.font="bold "+size+"px Arial";lines=graphicLines(ctx,title,w-140,5);if(lines.length*size*1.17<=380)break;size-=4;}while(size>45);
+ ctx.fillStyle="#fff";lines.forEach((line,i)=>ctx.fillText(line,70,940+i*size*1.17,w-140));
+ ctx.font="30px Arial";ctx.fillStyle="#e4e5ec";const sub=graphicLines(ctx,document.getElementById("graphicSub").value,w-140,2);sub.forEach((line,i)=>ctx.fillText(line,70,1205+i*38));
+ ctx.fillStyle="#e12646";ctx.fillRect(0,1305,w,45);
+ const logo=new Image();logo.onload=()=>{ctx.save();ctx.beginPath();ctx.roundRect(925,48,105,105,18);ctx.clip();ctx.drawImage(logo,925,48,105,105);ctx.restore();};logo.src="./DAI2.png";
+}
+function downloadGraphic(){renderGraphic();setTimeout(()=>{const canvas=document.getElementById("graphicCanvas");const a=document.createElement("a");a.download="daily-arsenal-info-post.png";a.href=canvas.toDataURL("image/png");a.click();},350);}
+
 function renderIdeas() {
   const root = document.getElementById("ideaList");
   root.replaceChildren();
@@ -703,6 +758,7 @@ function render() {
     ideas.filter(i => i.status === "Published").length;
   renderStories();
   renderIdeas();
+  renderCalendar();
 }
 
 
@@ -825,6 +881,7 @@ renderMetrics();
 loadLiveNews();
 
 render();
+renderGraphic();
 </script>
 </body>
 </html>
