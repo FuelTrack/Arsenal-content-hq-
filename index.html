@@ -134,6 +134,7 @@ footer {
   .hero h1 {font-size:25px}
   main {padding:18px}
 }
+.preview {font-size:14px;line-height:1.65;color:#d2d5df;background:#242833;border-left:3px solid #e12646;padding:12px 14px;border-radius:8px;margin:10px 0}.editor-note{font-size:12px;color:#c2a8ae;line-height:1.5}.voice-row{display:flex;align-items:center;gap:15px}.voice-row input{flex:1;margin:10px 0}.voice-row strong{min-width:45px;text-align:right}.story a{overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -268,9 +269,12 @@ footer {
     <select id="postStyle">
       <option value="breaking">Breaking News</option>
       <option value="update">News Update</option>
-      <option value="discussion">Fan Discussion</option>
+      <option value="discussion">Fan Discussion</option><option value="transfer">Transfer Update</option><option value="matchday">Matchday Reaction</option><option value="player">Player Performance</option>
     </select>
-    <button class="primary" onclick="generateCaption()">Generate Caption</button>
+    <label for="passion">Daily Arsenal Info passion level</label>
+    <div class="voice-row"><span class="muted">Factual</span><input id="passion" type="range" min="0" max="100" step="5" value="75" oninput="document.getElementById('passionValue').textContent=this.value+'%'"><strong id="passionValue">75%</strong></div>
+    <p class="editor-note">Inspired by your own captions: personal, conversational, selective CAPITALS, and a little emotion. This is a free, rules-based draft generator, not an AI fact checker. Verify claims against the original article before posting.</p>
+    <button class="primary" onclick="generateCaption()">Generate In My Voice</button>
   </div>
   <div class="card">
     <h3>Your Instagram Caption</h3>
@@ -456,23 +460,38 @@ function generateCaption() {
   const facts = document.getElementById("postFacts").value.trim();
   const source = document.getElementById("postSource").value.trim();
   const style = document.getElementById("postStyle").value;
-
+  const passion = Number(document.getElementById("passion").value);
   if (!title) return alert("Enter a headline first.");
-
-  let intro = "🔴 ARSENAL UPDATE";
-  if (style === "breaking") intro = "🚨 ARSENAL NEWS";
-  if (style === "discussion") intro = "🔴 GOONERS, YOUR THOUGHTS?";
-
-  const caption =
-    intro + "\n\n" +
-    title + "\n\n" +
-    (facts || "[Add verified details here]") +
-    "\n\n" +
-    (source ? "Source: " + source + "\n\n" : "") +
-    "What do you make of this? 👇\n\n" +
-    "#Arsenal #AFC #COYG #Gunners";
-
-  document.getElementById("captionOutput").value = caption;
+  // Never turn a rumour into a confirmed event. The headline remains verbatim.
+  const uncertain = /reportedly|report|rumou?r|linked|could|might|may |interest|target|consider|eyeing|set to|expected|potential|claims|according to|possible|talks/i.test(title);
+  const intro = {
+    breaking: passion >= 65 ? "Wow... big Arsenal news 👀" : "Arsenal update:",
+    update: passion >= 65 ? "Interesting Arsenal update here... 👀" : "Arsenal update:",
+    transfer: passion >= 65 ? "Another Arsenal transfer story to keep an eye on 👀" : "Arsenal transfer update:",
+    matchday: passion >= 65 ? "What a moment for the Gunners... ❤️" : "Arsenal matchday:",
+    player: passion >= 65 ? "What a player... 🤩" : "Arsenal player update:",
+    discussion: passion >= 65 ? "I've got to hear what everyone thinks about this one... 👀" : "Arsenal discussion:"
+  }[style] || "Arsenal update:";
+  let parts = [intro, title];
+  if (facts) parts.push(facts);
+  else parts.push("[Add verified details from the original report before posting.]");
+  if (uncertain) parts.push("Still only a report at this stage, nothing confirmed. Let's see how this develops.");
+  if (passion >= 45) {
+    const reactions = {
+      breaking:"Big talking point for us Arsenal fans...",
+      update:"Definitely one to keep an eye on...",
+      transfer:"Would you take this at the Emirates?",
+      matchday:"Love seeing the Gunners give us moments to talk about. COYG",
+      player:"Always love seeing our players getting the recognition they deserve.",
+      discussion:"I'm interested to hear what other Gooners make of it."
+    };
+    if (style === "player" && !facts) parts.push("I want to see more details before getting carried away.");
+    else if (style !== "player" || facts) parts.push(reactions[style] || reactions.update);
+  }
+  if (passion >= 85 && !uncertain && facts) parts.push("COYG ❤️");
+  if (source) parts.push("Source: " + source);
+  if (passion < 45 || style === "discussion") parts.push("What do you make of this?");
+  document.getElementById("captionOutput").value = parts.join("\\n\\n");
 }
 
 async function copyCaption() {
@@ -590,21 +609,27 @@ function renderLiveNews() {
     headline.style.cssText = "font-weight:700;font-size:17px;line-height:1.5;text-decoration:none;display:block;margin:8px 0 12px;color:#fff";
     headline.textContent = article.title + " ↗";
     box.appendChild(headline);
+    const excerpt = typeof article.preview === "string" ? article.preview.trim() : "";
+    const preview = makeText("div",excerpt || "Preview unavailable from this publisher's public feed. Open the original report to read the details.");
+    preview.className = "preview";
+    box.appendChild(preview);
+    if (!excerpt) box.appendChild(makeText("p","Headline only — do not treat this as a summary of the full article."));
     const actions = document.createElement("div");
     actions.className = "actions";
     actions.appendChild(makeButton("Save Story",() => {
       if (stories.some(story => story.url === article.url)) return alert("This story is already saved.");
-      stories.unshift({id:Date.now() + Math.random(),title:article.title,url:article.url,category:article.category,notes:"Source: " + article.source + ". Verify details in the original article before posting.",status:"Saved"});
+      stories.unshift({id:Date.now() + Math.random(),title:article.title,url:article.url,category:article.category,notes:(excerpt ? "Feed excerpt (unverified): " + excerpt + "\\n" : "") + "Source: " + article.source + ". Verify details in the original article before posting.",status:"Saved"});
       persist();
       render();
       alert("Story saved to your library.");
     }));
     actions.appendChild(makeButton("Create Post",() => {
       document.getElementById("postTitle").value = article.title;
-      document.getElementById("postFacts").value = "";
+      document.getElementById("postFacts").value = ""; // RSS excerpts are not verified facts
       document.getElementById("postSource").value = article.source + " — " + article.url;
       showTab("creator");
     }));
+    actions.appendChild(makeButton("Read Original ↗",() => window.open(article.url,"_blank","noopener,noreferrer")));
     box.appendChild(actions);
     root.appendChild(box);
   });
