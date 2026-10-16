@@ -652,6 +652,32 @@ function saveIdea() {
 }
 
 
+
+const KEY_READ="achq_read_v1",KEY_PRIORITY="achq_priority_v1",KEY_WORKFLOW="achq_workflow_v1";
+let readNews=load(KEY_READ),priorityNews=load(KEY_PRIORITY),unreadOnly=false;
+let activeWorkflow=null;
+function workflowKey(article){return article.url||article.title||"";}
+function toggleUnreadOnly(){unreadOnly=!unreadOnly;document.getElementById("unreadToggle").textContent=unreadOnly?"Show all stories":"Show unread only";renderLiveNews();}
+function clearReadNews(){if(!confirm("Clear all read indicators?"))return;readNews=[];storeExtra(KEY_READ,readNews);renderLiveNews();}
+function markRead(article){const key=workflowKey(article);if(!readNews.includes(key)){readNews.push(key);storeExtra(KEY_READ,readNews);}renderLiveNews();}
+function togglePriority(article){const key=workflowKey(article);priorityNews=priorityNews.includes(key)?priorityNews.filter(x=>x!==key):[key,...priorityNews];storeExtra(KEY_PRIORITY,priorityNews);renderLiveNews();}
+function openArticle(article){markRead(article);window.open(article.url,"_blank","noopener,noreferrer");}
+function sendCaptionToGraphics(){
+ const title=document.getElementById("postTitle").value.trim();if(!title)return alert("Enter a headline first.");
+ document.getElementById("graphicTitle").value=title;
+ const style=document.getElementById("postStyle").value;
+ document.getElementById("graphicTemplate").value=style==="transfer"?"transfer":style==="matchday"?"matchday":style==="player"?"ratings":"breaking";
+ activeWorkflow={title,source:document.getElementById("postSource").value,caption:document.getElementById("captionOutput").value,createdAt:new Date().toISOString()};
+ showTab("graphics");renderGraphic();
+}
+function saveGraphicToWorkflow(){
+ const title=document.getElementById("graphicTitle").value.trim();if(!title)return alert("Enter a headline first.");
+ const caption=(activeWorkflow&&activeWorkflow.caption)||document.getElementById("captionOutput").value.trim()||title;
+ const item={id:Date.now()+Math.random(),caption,status:"Draft",plannedDate:"",graphicTitle:title,graphicTemplate:document.getElementById("graphicTemplate").value,source:(activeWorkflow&&activeWorkflow.source)||""};
+ ideas.unshift(item);persist();render();showTab("planner");
+ alert("Added to planner. Download your graphic separately: browser storage does not include the exported image.");
+}
+
 let calendarOffset=0, graphicPhoto=null;
 function localDateKey(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return y+"-"+m+"-"+day;}
 function changeCalendarWeek(direction){calendarOffset=direction===0?0:calendarOffset+direction;renderCalendar();}
@@ -826,7 +852,7 @@ function renderLiveNews() {
   root.replaceChildren();
   const search=document.getElementById("newsSearch").value.trim().toLowerCase();
   const sort=document.getElementById("newsSort").value;
-  const filtered=liveNews.filter(article=>(currentNewsFilter==="All"||article.category===currentNewsFilter)&&(!search||[article.title,article.source,article.category].some(v=>String(v||"").toLowerCase().includes(search))));
+  const filtered=liveNews.filter(article=>(currentNewsFilter==="All"||article.category===currentNewsFilter)&&(!search||[article.title,article.source,article.category].some(v=>String(v||"").toLowerCase().includes(search)))&&(!unreadOnly||!readNews.includes(workflowKey(article))));
   if (!filtered.length) {
     document.getElementById("clusterSummary").replaceChildren();
     root.appendChild(makeText("p",liveNews.length ? "No stories in this category yet." : "No headlines available yet. Run the manual GitHub news collection workflow, then refresh this page."));
@@ -836,7 +862,7 @@ function renderLiveNews() {
   const ranked = filtered.map((article,index) => ({article,index,score:newsImportance(article)}))
     .sort((a,b)=>sort==="source"?String(a.article.source||"").localeCompare(String(b.article.source||"")):sort==="newest"?String(b.article.published||"").localeCompare(String(a.article.published||"")):b.score-a.score||a.index-b.index);
   // Top stories are the strongest-scoring relevant items, capped to keep the front page focused.
-  const top = ranked.filter(item => item.score >= 5).slice(0,8);
+  const top = ranked.filter(item => priorityNews.includes(workflowKey(item.article)) || item.score >= 5).sort((a,b)=>Number(priorityNews.includes(workflowKey(b.article)))-Number(priorityNews.includes(workflowKey(a.article)))).slice(0,8);
   const topIndices = new Set(top.map(item => item.index));
   const other = ranked.filter(item => !topIndices.has(item.index));
   function heading(name,description,count) {
@@ -850,7 +876,7 @@ function renderLiveNews() {
   }
   function appendArticle(article,isTop) {
     const box = document.createElement("div");
-    box.className = "story" + (isTop ? " top-news-story" : "");
+    box.className = "story" + (isTop ? " top-news-story" : "") + (readNews.includes(workflowKey(article))?" news-read":"") + (priorityNews.includes(workflowKey(article))?" news-priority":"");
     if (isTop) {
       const label = makeText("div","TOP HEADLINE");
       label.className = "news-tier-label";
@@ -862,6 +888,7 @@ function renderLiveNews() {
     badge.className="source-signal "+signal[1];box.appendChild(badge);
     const headline = document.createElement("a");
     headline.href = article.url;
+    headline.addEventListener("click",()=>markRead(article));
     headline.target = "_blank";
     headline.rel = "noopener noreferrer";
     headline.className = "news-headline";
@@ -882,7 +909,9 @@ function renderLiveNews() {
       alert("Story saved to your library.");
     }));
     actions.appendChild(makeButton("Create Post →",() => startContentFlow(article)));
-    actions.appendChild(makeButton("Read Original ↗",() => window.open(article.url,"_blank","noopener,noreferrer")));
+    actions.appendChild(makeButton("Read Original ↗",() => openArticle(article)));
+    actions.appendChild(makeButton(readNews.includes(workflowKey(article))?"Mark unread":"Mark read",()=>{if(readNews.includes(workflowKey(article)))readNews=readNews.filter(x=>x!==workflowKey(article));else readNews.push(workflowKey(article));storeExtra(KEY_READ,readNews);renderLiveNews();}));
+    actions.appendChild(makeButton(priorityNews.includes(workflowKey(article))?"Unpin priority":"★ Prioritise",()=>togglePriority(article)));
     box.appendChild(actions);
     root.appendChild(box);
   }
