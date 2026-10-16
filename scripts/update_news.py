@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build a public Arsenal headlines snapshot from Google News RSS search feeds."""
 import datetime as dt
+import html
 import email.utils
 import json
 import re
@@ -33,6 +34,16 @@ def clean_title(title, source):
     suffix = " - " + source
     return title[:-len(suffix)].strip() if source and title.endswith(suffix) else title.strip()
 
+def rss_preview(item):
+    raw = item.findtext("description") or ""
+    raw = re.sub(r"<[^>]+>", " ", raw)
+    raw = html.unescape(raw)
+    raw = re.sub(r"\\s+", " ", raw).strip()
+    # Google News descriptions often contain a headline and publisher link, not a genuine excerpt.
+    if len(raw) < 65 or "Google News" in raw or raw.lower().startswith("read full"):
+        return ""
+    return raw[:380].rsplit(" ", 1)[0] + ("…" if len(raw) > 380 else "")
+
 def category(title):
     s = title.lower()
     if any(x in s for x in ("injur", "fitness", "sidelined", "team news", "lineup", "line-up")):
@@ -62,12 +73,13 @@ for query in QUERIES:
                 continue
             if date < NOW - dt.timedelta(days=CUTOFF_DAYS) or date > NOW + dt.timedelta(hours=2):
                 continue
+            preview = rss_preview(item)
             title = clean_title(title, source)
             key = re.sub(r"[^a-z0-9]+", "", title.lower())[:115]
             if not key or key in seen:
                 continue
             seen.add(key)
-            items.append({"title": title, "url": link, "source": source, "published": date.isoformat(), "category": category(title)})
+            items.append({"title": title, "url": link, "source": source, "published": date.isoformat(), "category": category(title), "preview": preview})
     except Exception as exc:
         errors.append(f"{query}: {type(exc).__name__}: {exc}")
     time.sleep(0.4)
