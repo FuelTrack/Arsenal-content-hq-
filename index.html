@@ -491,7 +491,7 @@ function generateCaption() {
   if (passion >= 85 && !uncertain && facts) parts.push("COYG ❤️");
   if (source) parts.push("Source: " + source);
   if (passion < 45 || style === "discussion") parts.push("What do you make of this?");
-  document.getElementById("captionOutput").value = parts.join("\\n\\n");
+  document.getElementById("captionOutput").value = parts.join("\n\n");
 }
 
 async function copyCaption() {
@@ -618,7 +618,7 @@ function renderLiveNews() {
     actions.className = "actions";
     actions.appendChild(makeButton("Save Story",() => {
       if (stories.some(story => story.url === article.url)) return alert("This story is already saved.");
-      stories.unshift({id:Date.now() + Math.random(),title:article.title,url:article.url,category:article.category,notes:(excerpt ? "Feed excerpt (unverified): " + excerpt + "\\n" : "") + "Source: " + article.source + ". Verify details in the original article before posting.",status:"Saved"});
+      stories.unshift({id:Date.now() + Math.random(),title:article.title,url:article.url,category:article.category,notes:(excerpt ? "Feed excerpt (unverified): " + excerpt + "\n" : "") + "Source: " + article.source + ". Verify details in the original article before posting.",status:"Saved"});
       persist();
       render();
       alert("Story saved to your library.");
